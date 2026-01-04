@@ -3,91 +3,97 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.functions.account import CheckUsernameRequest
 from telethon.errors import FloodWaitError, SessionPasswordNeededError
 
-# هذه المتغيرات سيتم ملؤها تلقائياً بواسطة سكريبت installl.sh
-API_ID = API_ID_HERE
-API_HASH = 'API_HASH_HERE'
+# البيانات الثابتة التي قدمتها
+API_ID = 36656028
+API_HASH = 'a7e49446c9e8b43aee5db9c643fb4531'
+
+# مفاتيح RSA الخاصة بك (للتوثيق داخل السكربت)
+RSA_KEYS = [
+    "MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR...",
+    "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g..."
+]
+
+# سيتم حقن هذه البيانات بواسطة ملف installl.sh
 BOT_TOKEN = 'TOKEN_HERE'
 ADMIN_ID = ADMIN_ID_HERE
 
-# أسماء الملفات الجديدة لتجنب التضارب
-USER_SESSION = 'checker_account'
-ALL_USERS_FILE = 'found_all.txt'
-PREMIUM_USERS_FILE = 'premium_only.txt'
+# أسماء الملفات
+USER_SESSION = 'account_session'
+ALL_FOUND = 'all_users.txt'
+PREMIUM_FOUND = 'premium_users.txt'
 
 client = TelegramClient(USER_SESSION, API_ID, API_HASH)
-bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+bot = TelegramClient('bot_session', API_ID, API_HASH)
 
-is_searching = False
+is_running = False
 
-def generate_user(mode, length):
+def generate_username(mode, length):
     if mode == "letters":
         return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
-    elif mode == "mixed": # حرف + ارقام
+    elif mode == "mixed":
         return random.choice(string.ascii_lowercase) + ''.join(random.choice(string.digits) for _ in range(length-1))
-    elif mode == "alphanumeric": # حروف وارقام عشوائي
-        chars = string.ascii_lowercase + string.digits
-        return ''.join(random.choice(chars) for _ in range(length))
+    elif mode == "alpha_num":
+        return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
 
 @bot.on(events.NewMessage(pattern='/start'))
-async def start_handler(event):
+async def start(event):
     if event.sender_id != ADMIN_ID: return
     btns = [
-        [Button.inline("🔍 بحث عن يوزرات", b"open_search")],
-        [Button.inline("📂 كل اليوزرات", b"view_all"), Button.inline("💎 المميزة", b"view_premium")]
+        [Button.inline("🔍 بدء البحث", b"menu")],
+        [Button.inline("📂 سجل اليوزرات", b"show_all"), Button.inline("💎 اليوزرات المميزة", b"show_vip")]
     ]
-    await event.respond("🚀 أهلاً بك في بوت فحص اليوزرات المتاحة:", buttons=btns)
+    await event.respond("🚀 مرحباً بك في لوحة تحكم الصائد الاستثماري:", buttons=btns)
 
 @bot.on(events.CallbackQuery)
-async def callback_handler(event):
-    global is_searching
+async def callback(event):
+    global is_running
     data = event.data
-    
-    if data == b"open_search":
+
+    if data == b"menu":
         btns = [
-            [Button.inline("🔤 حروف فقط", b"m_letters"), Button.inline("🔢 حرف + أرقام", b"m_mixed")],
-            [Button.inline("🔡 حروف وأرقام", b"m_alpha")],
-            [Button.inline("🛑 إيقاف البحث", b"stop_search")]
+            [Button.inline("🔤 حروف فقط", b"mode_letters"), Button.inline("🔢 حرف + أرقام", b"mode_mixed")],
+            [Button.inline("🔡 حروف وأرقام", b"mode_alpha")],
+            [Button.inline("🛑 إيقاف البحث", b"stop")]
         ]
-        await event.edit("اختر نوع البحث:", buttons=btns)
+        await event.edit("اختر نوع التوليد:", buttons=btns)
 
-    elif data.startswith(b"m_"):
-        mode_map = {b"m_letters": "letters", b"m_mixed": "mixed", b"m_alpha": "alphanumeric"}
-        mode = mode_map[data]
-        
+    elif data.startswith(b"mode_"):
+        mode = data.decode().split('_')[1]
         async with bot.conversation(event.sender_id) as conv:
-            await conv.send_message("كم عدد حروف اليوزر؟ (أرسل رقم فقط)")
-            msg = await conv.get_response()
-            length = int(msg.text)
+            await conv.send_message("🔢 أرسل عدد خانات اليوزر (مثلاً 5):")
+            res = await conv.get_response()
+            length = int(res.text)
+            is_running = True
+            await conv.send_message(f"✅ بدأ الفحص... طول اليوزر {length}")
             
-            is_searching = True
-            await conv.send_message(f"✅ بدأ الفحص عن يوزرات ({length}) حرف.. سأرسل المتاح هنا.")
-            
-            while is_searching:
-                target = generate_user(mode, length)
+            while is_running:
+                user = generate_username(mode, length)
                 try:
-                    res = await client(CheckUsernameRequest(target))
-                    if res:
-                        with open(ALL_USERS_FILE, "a") as f: f.write(f"@{target}\n")
-                        # شرط بسيط للتميز: إذا كان اليوزر يحتوي على اقل من 3 رموز مختلفة
-                        if len(set(target)) <= 3:
-                            with open(PREMIUM_USERS_FILE, "a") as f: f.write(f"@{target}\n")
-                            await bot.send_message(ADMIN_ID, f"💎 يوزر مميز متاح: @{target}")
+                    available = await client(CheckUsernameRequest(user))
+                    if available:
+                        with open(ALL_FOUND, "a") as f: f.write(f"@{user}\n")
+                        # معيار التميز (يوزر ثلاثي الرموز أو أقل)
+                        if len(set(user)) <= 3:
+                            with open(PREMIUM_FOUND, "a") as f: f.write(f"@{user}\n")
+                            await bot.send_message(ADMIN_ID, f"💎 صيد مميز: @{user}")
                         else:
-                            await bot.send_message(ADMIN_ID, f"✅ متاح: @{target}")
-                except FloodWaitError as e:
-                    await asyncio.sleep(e.seconds)
-                except Exception:
-                    pass
-                await asyncio.sleep(2) # تأخير لتجنب الحظر
+                            await bot.send_message(ADMIN_ID, f"✅ يوزر متاح: @{user}")
+                except FloodWaitError as e: await asyncio.sleep(e.seconds)
+                except: pass
+                await asyncio.sleep(1.2)
 
-    elif data == b"stop_search":
-        is_searching = False
-        await event.edit("⏹ تم إيقاف البحث بنجاح.")
+    elif data == b"stop":
+        is_running = False
+        await event.edit("⏹ تم إيقاف البحث.")
+
+    elif data == b"show_all":
+        if os.path.exists(ALL_FOUND): await event.respond("كل اليوزرات:", file=ALL_FOUND)
+        else: await event.answer("السجل فارغ.")
 
 async def main():
-    # تسجيل الدخول للحساب الشخصي مع دعم التحقق بخطوتين
     await client.start()
-    print("--- الحساب الشخصي متصل الآن ---")
+    await bot.start(bot_token=BOT_TOKEN)
+    print("--- البوت والحساب متصلان بنجاح ---")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
