@@ -1,31 +1,33 @@
-#!/bin/bash
+here#!/bin/bash
 
-# تنظيف الملفات القديمة
-rm -rf /root/t-checker
-mkdir /root/t-checker
-cd /root/t-checker
+# 1. تنظيف السيرفر من النسخ القديمة
+rm -rf /root/t_checker
+mkdir /root/t_checker
+cd /root/t_checker
 
-echo "--- تنصيب صائد اليوزرات الاحترافي ---"
-
-# تثبيت المتطلبات
-apt update
-apt install -y python3 python3-pip git
+# 2. تثبيت المتطلبات الأساسية
+echo "--- جارِ تثبيت المتطلبات (Python & Telethon) ---"
+apt update && apt upgrade -y
+apt install -y python3 python3-pip git curl
 pip3 install telethon
 
-# طلب البيانات من المستخدم
-read -p "أدخل BOT_TOKEN: " token
-read -p "أدخل API_ID: " apiid
-read -p "أدخل API_HASH: " aphash
-read -p "أدخل ID المطور: " adminid
+# 3. تحميل ملف البوت البرمجي من GitHub (تأكد من تسمية الملف البرمجي bot_core.py ورفعه بجانب install.sh)
+curl -Ls https://raw.githubusercontent.com/Affuyfuffyt/Blustwin1/refs/heads/main/bot_core.py -o bot_core.py
 
-# تحميل كود البوت (يمكنك رفعه على كيت هب واستبدال الرابط أدناه)
-# wget https://raw.githubusercontent.com/username/repo/main/t-checker.py
+# 4. طلب البيانات من المستخدم بصورة تفاعلية
+echo "-----------------------------------------------"
+read -p "Enter BOT_TOKEN: " token
+read -p "Enter API_ID: " apiid
+read -p "Enter API_HASH: " aphash
+read -p "Enter ADMIN_ID: " adminid
+echo "-----------------------------------------------"
 
-# تعديل البيانات داخل الملف
-sed -i "s/API_ID_HERE/'$apiid'/g" t-checker.py
-sed -i "s/API_HASH_HERE/'$aphash'/g" t-checker.py
-sed -i "s/BOT_TOKEN_HERE/'$token'/g" t-checker.py
-sed -i "s/ADMIN_ID_HERE/$adminid/g" t-checker.py
+# 5. حقن البيانات داخل ملف البوت
+sed -i "s/TOKEN_HERE/$token/g" bot_core.py
+sed -i "s/API_ID_HERE/$apiid/g" bot_core.py
+sed -i "s/API_HASH_HERE/$aphash/g" bot_core.py
+sed -i "s/ADMIN_ID_HERE/$adminid/g" bot_core.py
 
-echo "--- جاري تشغيل البوت للمرة الأولى لربط الحساب ---"
-python3 t-checker.py
+# 6. تشغيل البوت (في أول مرة سيطلب الرقم والكود والتحقق بخطوتين)
+echo "--- سيتم الآن طلب رقم الهاتف لربط الحساب الشخصي ---"
+python3 bot_core.py
