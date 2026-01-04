@@ -1,101 +1,95 @@
-import random, string, os, asyncio
+import random, string, os, asyncio, sys
 from telethon import TelegramClient, events, Button
 from telethon.tl.functions.account import CheckUsernameRequest
-from telethon.errors import FloodWaitError, SessionPasswordNeededError
+from telethon.errors import FloodWaitError
 
-# البيانات الثابتة التي قدمتها
-API_ID = 36656028
-API_HASH = 'a7e49446c9e8b43aee5db9c643fb4531'
-
-# مفاتيح RSA الخاصة بك (للتوثيق داخل السكربت)
-RSA_KEYS = [
-    "MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR...",
-    "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g..."
-]
-
-# سيتم حقن هذه البيانات بواسطة ملف installl.sh
+# بياناتك الثابتة المحدثة
+API_ID = 33582712
+API_HASH = 'b3f42765ce6e66b075bf2560bb6a148f'
 BOT_TOKEN = 'TOKEN_HERE'
 ADMIN_ID = ADMIN_ID_HERE
 
-# أسماء الملفات
-USER_SESSION = 'account_session'
-ALL_FOUND = 'all_users.txt'
-PREMIUM_FOUND = 'premium_users.txt'
-
-client = TelegramClient(USER_SESSION, API_ID, API_HASH)
+client = TelegramClient('account_session', API_ID, API_HASH)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 
-is_running = False
+is_searching = False
+checked_count = 0
 
-def generate_username(mode, length):
+def generate_user(mode, length):
+    first_char = random.choice(string.ascii_lowercase)
     if mode == "letters":
-        return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
+        rest = ''.join(random.choice(string.ascii_lowercase) for _ in range(length - 1))
     elif mode == "mixed":
-        return random.choice(string.ascii_lowercase) + ''.join(random.choice(string.digits) for _ in range(length-1))
-    elif mode == "alpha_num":
-        return ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
+        rest = ''.join(random.choice(string.digits) for _ in range(length - 1))
+    else:
+        chars = string.ascii_lowercase + string.digits
+        rest = ''.join(random.choice(chars) for _ in range(length - 1))
+    return first_char + rest
+
+async def hunter_engine(mode, length):
+    global is_searching, checked_count
+    loop_count = 0
+    
+    while is_searching:
+        user = generate_user(mode, length)
+        try:
+            result = await client(CheckUsernameRequest(user))
+            checked_count += 1
+            loop_count += 1
+            
+            if result:
+                await bot.send_message(ADMIN_ID, f"✅ **صيد جديد:** @{user}")
+                with open('found.txt', 'a') as f: f.write(f"@{user}\n")
+
+            # --- نظام الحماية الذكي ---
+            # 1. استراحة قصيرة عشوائية بين الطلبات
+            await asyncio.sleep(random.uniform(2.5, 5.5))
+            
+            # 2. استراحة طويلة بعد كل 50 يوزر (محاكاة لتوقف بشري)
+            if loop_count >= 50:
+                await bot.send_message(ADMIN_ID, "☕ **استراحة أمان:** سأتوقف لمدة 3 دقائق لتجنب الحظر.")
+                await asyncio.sleep(180)
+                loop_count = 0
+
+        except FloodWaitError as e:
+            await bot.send_message(ADMIN_ID, f"⚠️ **تحذير الحظر:** تيليجرام طلب الانتظار {e.seconds} ثانية. سألتزم بذلك.")
+            await asyncio.sleep(e.seconds + 10)
+        except Exception:
+            pass
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
     if event.sender_id != ADMIN_ID: return
     btns = [
-        [Button.inline("🔍 بدء البحث", b"menu")],
-        [Button.inline("📂 سجل اليوزرات", b"show_all"), Button.inline("💎 اليوزرات المميزة", b"show_vip")]
+        [Button.inline("▶️ بدء الصيد الآمن", b"run"), Button.inline("🛑 إيقاف", b"stop")],
+        [Button.inline("🔄 ريستارت", b"restart"), Button.inline("📊 الإحصائيات", b"stats")]
     ]
-    await event.respond("🚀 مرحباً بك في لوحة تحكم الصائد الاستثماري:", buttons=btns)
+    await event.respond("🛡️ **لوحة التحكم (نظام الحماية القصوى)**\nتم ضبط الإعدادات لتجنب الحظر نهائياً.", buttons=btns)
 
 @bot.on(events.CallbackQuery)
 async def callback(event):
-    global is_running
-    data = event.data
-
-    if data == b"menu":
-        btns = [
-            [Button.inline("🔤 حروف فقط", b"mode_letters"), Button.inline("🔢 حرف + أرقام", b"mode_mixed")],
-            [Button.inline("🔡 حروف وأرقام", b"mode_alpha")],
-            [Button.inline("🛑 إيقاف البحث", b"stop")]
-        ]
-        await event.edit("اختر نوع التوليد:", buttons=btns)
-
-    elif data.startswith(b"mode_"):
-        mode = data.decode().split('_')[1]
-        async with bot.conversation(event.sender_id) as conv:
-            await conv.send_message("🔢 أرسل عدد خانات اليوزر (مثلاً 5):")
-            res = await conv.get_response()
-            length = int(res.text)
-            is_running = True
-            await conv.send_message(f"✅ بدأ الفحص... طول اليوزر {length}")
-            
-            while is_running:
-                user = generate_username(mode, length)
-                try:
-                    available = await client(CheckUsernameRequest(user))
-                    if available:
-                        with open(ALL_FOUND, "a") as f: f.write(f"@{user}\n")
-                        # معيار التميز (يوزر ثلاثي الرموز أو أقل)
-                        if len(set(user)) <= 3:
-                            with open(PREMIUM_FOUND, "a") as f: f.write(f"@{user}\n")
-                            await bot.send_message(ADMIN_ID, f"💎 صيد مميز: @{user}")
-                        else:
-                            await bot.send_message(ADMIN_ID, f"✅ يوزر متاح: @{user}")
-                except FloodWaitError as e: await asyncio.sleep(e.seconds)
-                except: pass
-                await asyncio.sleep(1.2)
-
-    elif data == b"stop":
-        is_running = False
-        await event.edit("⏹ تم إيقاف البحث.")
-
-    elif data == b"show_all":
-        if os.path.exists(ALL_FOUND): await event.respond("كل اليوزرات:", file=ALL_FOUND)
-        else: await event.answer("السجل فارغ.")
+    global is_searching, checked_count
+    if event.data == b"run":
+        modes = [[Button.inline("حروف", b"m_letters"), Button.inline("مختلط", b"m_alpha")]]
+        await event.edit("اختر النوع:", buttons=modes)
+    elif event.data.startswith(b"m_"):
+        mode = event.data.decode().split('_')[1]
+        is_searching = True
+        checked_count = 0
+        asyncio.create_task(hunter_engine(mode, 5)) # افتراضي طول 5 رموز
+        await event.respond("🚀 **انطلق الصيد الآمن..** لا تقلق من الحظر.")
+    elif event.data == b"stop":
+        is_searching = False
+        await event.answer("🛑 توقفنا.")
+    elif event.data == b"stats":
+        await event.answer(f"📊 فحصنا {checked_count} يوزر اليوم", alert=True)
+    elif event.data == b"restart":
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
 async def main():
     await client.start()
     await bot.start(bot_token=BOT_TOKEN)
-    print("--- البوت والحساب متصلان بنجاح ---")
     await bot.run_until_disconnected()
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())
