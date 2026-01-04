@@ -1,33 +1,32 @@
-here#!/bin/bash
+#!/bin/bash
 
-# 1. تنظيف السيرفر من النسخ القديمة
-rm -rf /root/t_checker
-mkdir /root/t_checker
-cd /root/t_checker
+# 1. تنظيف السيرفر
+rm -rf /root/tg_hunter
+mkdir /root/tg_hunter
+cd /root/tg_hunter
 
-# 2. تثبيت المتطلبات الأساسية
-echo "--- جارِ تثبيت المتطلبات (Python & Telethon) ---"
+echo "------------------------------------------------"
+echo "    جاري تثبيت نظام صيد اليوزرات الاحترافي      "
+echo "------------------------------------------------"
+
+# 2. تثبيت المكتبات
 apt update && apt upgrade -y
-apt install -y python3 python3-pip git curl
+apt install -y python3 python3-pip curl
 pip3 install telethon
 
-# 3. تحميل ملف البوت البرمجي من GitHub (تأكد من تسمية الملف البرمجي bot_core.py ورفعه بجانب install.sh)
+# 3. تحميل الكود من GitHub
 curl -Ls https://raw.githubusercontent.com/Affuyfuffyt/Blustwin1/refs/heads/main/bot_core.py -o bot_core.py
 
-# 4. طلب البيانات من المستخدم بصورة تفاعلية
-echo "-----------------------------------------------"
-read -p "Enter BOT_TOKEN: " token
-read -p "Enter API_ID: " apiid
-read -p "Enter API_HASH: " aphash
-read -p "Enter ADMIN_ID: " adminid
-echo "-----------------------------------------------"
+# 4. طلب البيانات الأساسية فقط
+read -p "🎯 أدخل Token البوت: " token
+read -p "🎯 أدخل ID حسابك (Admin): " adminid
 
-# 5. حقن البيانات داخل ملف البوت
+# 5. حقن البيانات في الملف
 sed -i "s/TOKEN_HERE/$token/g" bot_core.py
-sed -i "s/API_ID_HERE/$apiid/g" bot_core.py
-sed -i "s/API_HASH_HERE/$aphash/g" bot_core.py
 sed -i "s/ADMIN_ID_HERE/$adminid/g" bot_core.py
 
-# 6. تشغيل البوت (في أول مرة سيطلب الرقم والكود والتحقق بخطوتين)
-echo "--- سيتم الآن طلب رقم الهاتف لربط الحساب الشخصي ---"
+# 6. التشغيل وطلب الرقم/الكود/2FA
+echo "------------------------------------------------"
+echo " سيتم الآن ربط حسابك الشخصي (أدخل الرقم والكود) "
+echo "------------------------------------------------"
 python3 bot_core.py
